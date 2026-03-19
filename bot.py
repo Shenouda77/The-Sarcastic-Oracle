@@ -12,7 +12,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 # --- الإعدادات الأساسية ---
-API_TOKEN ='8611847166:AAHsojGY1s0QDxRG5ALi4snPlCfNSv-CYoQ'
+API_TOKEN = '8611847166:AAHsojGY1s0QDxRG5ALi4snPlCfNSv-CYoQ'
 TWITTER_USER = "@OracleScans"
 TWITTER_URL = "https://x.com/OracleScans"
 BOT_LINK = "https://t.me/OracleOrigins_bot"
@@ -201,12 +201,24 @@ def build_report(ca_address, rugcheck_data, dex_data, goplus_data):
     high_risk = rugcheck_data and rugcheck_data.get('score', 0) > 600
     medium_risk = rugcheck_data and rugcheck_data.get('score', 0) > 200
 
+    # كشف الخطر من بيانات السوق لو RugCheck فشل
+    market_danger = False
+    if dex_data:
+        change = dex_data.get('priceChange', {}).get('h24', None)
+        liq = dex_data.get('liquidity', {}).get('usd', 0)
+        if change is not None and float(change) < -50:
+            market_danger = True
+        if liq and float(liq) < 5000:
+            market_danger = True
+
     if is_honeypot:
         report += f"🚨 *AVOID — Honeypot. You cannot sell.*\n"
-    elif high_risk:
-        report += f"🔴 *HIGH RISK — Multiple red flags.*\n"
+    elif high_risk or market_danger:
+        report += f"🔴 *HIGH RISK — Data signals danger.*\n"
     elif medium_risk:
         report += f"🟡 *MEDIUM RISK — Proceed with caution.*\n"
+    elif not rugcheck_data:
+        report += f"⚠️ *UNVERIFIED — RugCheck unavailable. DYOR carefully.*\n"
     else:
         report += f"🟢 *RELATIVELY SAFE — Always DYOR.*\n"
 
@@ -403,4 +415,3 @@ if __name__ == "__main__":
     print("🔮 The Oracle is now online...")
 
     bot.infinity_polling(timeout=60, long_polling_timeout=60)
-
