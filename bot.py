@@ -16,6 +16,7 @@ API_TOKEN = '8611847166:AAHsojGY1s0QDxRG5ALi4snPlCfNSv-CYoQ'
 TWITTER_USER = "@OracleScans"
 TWITTER_URL = "https://x.com/OracleScans"
 BOT_LINK = "https://t.me/OracleOrigins_bot"
+COMMUNITY_LINK = "https://t.me/OracleOrigins"
 
 bot = telebot.TeleBot(API_TOKEN, threaded=True, num_threads=10)
 
@@ -44,7 +45,7 @@ session.mount('https://', HTTPAdapter(max_retries=retries, pool_connections=20, 
 def fetch_rugcheck(ca_address):
     try:
         url = f"https://api.rugcheck.xyz/v1/tokens/{ca_address}/report/summary"
-        response = session.get(url, timeout=8)
+        response = session.get(url, timeout=5)
         if response.status_code == 200:
             return response.json()
         return None
@@ -55,7 +56,7 @@ def fetch_rugcheck(ca_address):
 def fetch_dexscreener(ca_address):
     try:
         url = f"https://api.dexscreener.com/latest/dex/tokens/{ca_address}"
-        response = session.get(url, timeout=8)
+        response = session.get(url, timeout=5)
         if response.status_code == 200:
             data = response.json()
             if data.get('pairs') and len(data['pairs']) > 0:
@@ -68,7 +69,7 @@ def fetch_dexscreener(ca_address):
 def fetch_goplus(ca_address):
     try:
         url = f"https://api.gopluslabs.io/api/v1/solana/token_security/{ca_address}"
-        response = session.get(url, timeout=8)
+        response = session.get(url, timeout=5)
         if response.status_code == 200:
             data = response.json()
             if data.get('result'):
@@ -222,7 +223,12 @@ def build_report(ca_address, rugcheck_data, dex_data, goplus_data):
     else:
         report += f"🟢 *RELATIVELY SAFE — Always DYOR.*\n"
 
-    report += f"\n_🔮 @OracleScans — I don't predict. I expose._"
+    report += (
+        f"\n━━━━━━━━━━━━━━━━━\n"
+        f"🐦 [X: @OracleScans]({TWITTER_URL})  |  "
+        f"👥 [Community]({COMMUNITY_LINK})\n"
+        f"_🔮 I don't predict. I expose._"
+    )
     return report
 
 # ════════════════════════════════════════
@@ -244,10 +250,25 @@ def process_scan(chat_id, message_id, ca_address):
             )
             return
 
-        # جلب البيانات من APIs
-        rugcheck = fetch_rugcheck(ca_address)
-        dex = fetch_dexscreener(ca_address)
-        goplus = fetch_goplus(ca_address)
+        # جلب البيانات من APIs بالتوازي لتسريع البوت
+        rugcheck_result = [None]
+        dex_result = [None]
+        goplus_result = [None]
+
+        def get_rug(): rugcheck_result[0] = fetch_rugcheck(ca_address)
+        def get_dex(): dex_result[0] = fetch_dexscreener(ca_address)
+        def get_gop(): goplus_result[0] = fetch_goplus(ca_address)
+
+        t1 = threading.Thread(target=get_rug)
+        t2 = threading.Thread(target=get_dex)
+        t3 = threading.Thread(target=get_gop)
+
+        t1.start(); t2.start(); t3.start()
+        t1.join(); t2.join(); t3.join()
+
+        rugcheck = rugcheck_result[0]
+        dex = dex_result[0]
+        goplus = goplus_result[0]
 
         # لو كل الـ APIs فشلوا
         if not rugcheck and not dex and not goplus:
